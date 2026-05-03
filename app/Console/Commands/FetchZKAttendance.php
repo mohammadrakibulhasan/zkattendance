@@ -46,56 +46,61 @@ class FetchZKAttendance extends Command
                 Log::info('Today\'s attendance: ' . json_encode($todaysAttendance));
 
 
-                // Make an HTTP request to another server
-                try {
-                    $httpResponse = Http::post('https://hrms.hellonotionhive.com/api/zkteco/push', [
-                        'attendance' => $todaysAttendance,
-                    ]);
-                    // $httpResponse = Http::post('http://localhost:8000/api/zkteco/push', [
-                    //     'attendance' => $todaysAttendance,
-                    // ]);
+                $endpoints = [
+                    // 'https://hrms.hellonotionhive.com/api/zkteco/push',
+                    'https://riseo-hrms.hellonotionhive.com/api/zkteco/push'
+                ];
 
-                    // Check if the HTTP request was successful
-                    if ($httpResponse->successful()) {
-                        $responseBody = $httpResponse->getBody();
+                foreach ($endpoints as $endpoint) {
+                    $this->info("Sending to endpoint: " . $endpoint);
+                    // Make an HTTP request to another server
+                    try {
+                        $httpResponse = Http::post($endpoint, [
+                            'attendance' => $todaysAttendance,
+                        ]);
 
-                        $this->info('Raw response body: ' . $responseBody);
+                        // Check if the HTTP request was successful
+                        if ($httpResponse->successful()) {
+                            $responseBody = $httpResponse->getBody();
 
-                        // Check if response body is not empty
-                        if (empty($responseBody)) {
-                            $this->error('Empty response body received from server');
-                            return 1;
-                        }
+                            $this->info('Raw response body (' . $endpoint . '): ' . $responseBody);
 
-                        $response = json_decode($responseBody, true);
-
-                        // Check if JSON decoding was successful
-                        if (json_last_error() !== JSON_ERROR_NONE) {
-                            $this->error('Invalid JSON response from server. Error: ' . json_last_error_msg());
-                            $this->error('Response body: ' . $responseBody);
-                            return 1;
-                        }
-
-                        $this->info('Response: ' . json_encode($response));
-
-                        if (isset($response['status']) && $response['status'] == 'success') {
-                            $this->info('Attendance logs sent to another server successfully.');
-                        } elseif (isset($response['message']) && $response['message'] === 'OK') {
-                            $this->info('Attendance logs sent to another server successfully.');
-                        } else {
-                            $this->error('Failed to send attendance logs to another server.');
-                            if (isset($response['message'])) {
-                                $this->error('Server message: ' . $response['message']);
+                            // Check if response body is not empty
+                            if (empty($responseBody)) {
+                                $this->error('Empty response body received from server ' . $endpoint);
+                                continue;
                             }
+
+                            $response = json_decode($responseBody, true);
+
+                            // Check if JSON decoding was successful
+                            if (json_last_error() !== JSON_ERROR_NONE) {
+                                $this->error('Invalid JSON response from server. Error: ' . json_last_error_msg());
+                                $this->error('Response body ' . $endpoint . ': ' . $responseBody);
+                                continue;
+                            }
+
+                            $this->info('Response (' . $endpoint . '): ' . json_encode($response));
+
+                            if (isset($response['status']) && $response['status'] == 'success') {
+                                $this->info('Attendance logs sent to ' . $endpoint . ' successfully.');
+                            } elseif (isset($response['message']) && $response['message'] === 'OK') {
+                                $this->info('Attendance logs sent to ' . $endpoint . ' successfully.');
+                            } else {
+                                $this->error('Failed to send attendance logs to ' . $endpoint . '.');
+                                if (isset($response['message'])) {
+                                    $this->error('Server message: ' . $response['message']);
+                                }
+                            }
+                        } else {
+                            $this->error('HTTP request failed with status: ' . $httpResponse->status() . ' for ' . $endpoint);
+                            $this->error('Response body: ' . $httpResponse->getBody());
+                            continue;
                         }
-                    } else {
-                        $this->error('HTTP request failed with status: ' . $httpResponse->status());
-                        $this->error('Response body: ' . $httpResponse->getBody());
-                        return 1;
+                    } catch (\Exception $e) {
+                        $this->error('HTTP request exception for ' . $endpoint . ': ' . $e->getMessage());
+                        continue;
                     }
-                } catch (\Exception $e) {
-                    $this->error('HTTP request exception: ' . $e->getMessage());
-                    return 1;
                 }
                 // $users = $zk->getUser();
                 // Log::info(json_encode($users));

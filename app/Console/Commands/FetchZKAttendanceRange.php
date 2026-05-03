@@ -13,6 +13,9 @@ class FetchZKAttendanceRange extends Command
     protected $signature = 'zk:fetch-range {start_date} {end_date}';
     protected $description = 'Fetch attendance logs from ZKTeco K40 device for a specific date range';
 
+    //  php artisan attendance:fetch-employee-monthly 1314 4 2026 --ip=192.168.88.201 --port=4370
+    //  php artisan zk:fetch-range 2026-04-01 2026-05-03
+
     public function handle()
     {
         $ip = '192.168.88.201';  // your device IP
@@ -65,7 +68,7 @@ class FetchZKAttendanceRange extends Command
                         // Check if chunk contains emp_id 1275
                         // $containsEmpId = false;
                         // foreach ($chunk as $log) {
-                        //     if (isset($log['id']) && $log['id'] == 1275) {
+                        //     if (isset($log['id']) && $log['id'] == 1314) {
                         //         $containsEmpId = true;
                         //         break;
                         //     }
@@ -78,32 +81,40 @@ class FetchZKAttendanceRange extends Command
                         $currentChunk = $index + 1;
                         $this->info("Pushing chunk $currentChunk of $totalChunks...");
 
-                        // Make an HTTP request to another server
-                        try {
-                            $httpResponse = Http::post('https://hrms.hellonotionhive.com/api/zkteco/push', [
-                                'attendance' => $chunk,
-                            ]);
+                        $endpoints = [
+                            // 'https://hrms.hellonotionhive.com/api/zkteco/push',
+                            'https://riseo-hrms.hellonotionhive.com/api/zkteco/push'
+                        ];
 
-                            if ($httpResponse->successful()) {
-                                $responseBody = $httpResponse->getBody();
-                                $response = json_decode($responseBody, true);
+                        foreach ($endpoints as $endpoint) {
+                            $this->info("Pushing to endpoint: $endpoint");
+                            // Make an HTTP request to another server
+                            try {
+                                $httpResponse = Http::post($endpoint, [
+                                    'attendance' => $chunk,
+                                ]);
 
-                                if ((isset($response['status']) && $response['status'] == 'success') ||
-                                    (isset($response['message']) && $response['message'] === 'OK')
-                                ) {
-                                    $this->info("Chunk $currentChunk sent successfully.");
-                                } else {
-                                    $this->error("Failed to send chunk $currentChunk.");
-                                    if (isset($response['message'])) {
-                                        $this->error('Server message: ' . $response['message']);
+                                if ($httpResponse->successful()) {
+                                    $responseBody = $httpResponse->getBody();
+                                    $response = json_decode($responseBody, true);
+
+                                    if ((isset($response['status']) && $response['status'] == 'success') ||
+                                        (isset($response['message']) && $response['message'] === 'OK')
+                                    ) {
+                                        $this->info("Chunk $currentChunk sent successfully to $endpoint.");
+                                    } else {
+                                        $this->error("Failed to send chunk $currentChunk to $endpoint.");
+                                        if (isset($response['message'])) {
+                                            $this->error('Server message: ' . $response['message']);
+                                        }
                                     }
+                                } else {
+                                    $this->error("HTTP request failed for chunk $currentChunk to $endpoint with status: " . $httpResponse->status());
+                                    $this->error('Response body: ' . $httpResponse->getBody());
                                 }
-                            } else {
-                                $this->error("HTTP request failed for chunk $currentChunk with status: " . $httpResponse->status());
-                                $this->error('Response body: ' . $httpResponse->getBody());
+                            } catch (\Exception $e) {
+                                $this->error("HTTP request exception for chunk $currentChunk to $endpoint: " . $e->getMessage());
                             }
-                        } catch (\Exception $e) {
-                            $this->error("HTTP request exception for chunk $currentChunk: " . $e->getMessage());
                         }
                     }
                 } else {

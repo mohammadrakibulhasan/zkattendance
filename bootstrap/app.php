@@ -17,7 +17,14 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
-        $times = ['10:30', '11:00', '11:30','14:00'];
+        $start = '09:59';
+        $end = '14:30';
+        $times = [];
+        $current = $start;
+        while (strtotime($current) < strtotime($end)) {
+            $times[] = $current;
+            $current = date('H:i', strtotime('+10 minutes', strtotime($current)));
+        }
         // $times = ['10:30', '11:00', '11:30', '12:00', '17:00'];
         foreach ($times as $time) {
             $schedule->job(new \App\Jobs\FetchZKAttendanceJob)
